@@ -214,6 +214,7 @@
   .pill-new { background: var(--accent-soft); color: var(--accent); }
   .pill-re  { background: var(--warn-soft); color: var(--warn); }
   .pill-fake{ background: #fef3c7; color: #92400e; }
+  .pill-fail{ background: var(--danger-soft); color: var(--danger); }
 
   .toast {
     position: fixed; right: 20px; bottom: 20px;
@@ -248,7 +249,7 @@
 <header>
   <h1>📁 프로젝트 선택 · 자료생성 콘솔</h1>
   <div class="meta">
-    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 10:25:11</b>
+    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 11:32:07</b>
   </div>
 </header>
 
@@ -317,8 +318,9 @@
       </div>
     </div>
     <div class="notice">
-      현재는 <b>시뮬레이션 모드</b>입니다 — [생성] 클릭 시 브라우저 localStorage 에 이력만 기록됩니다.
-      추후 백엔드(파이썬 스크립트) 연결 시 실제 CSV/HTML 산출이 수행됩니다.
+      <b>n8n 백엔드 연결됨</b> — [생성] 클릭 시 <code>https://habitree.app.n8n.cloud/webhook/pms-build</code> 에 POST 요청.
+      현재 워크플로는 입력 검증 + ERP PJT 존재 확인 + 큐 등록 응답까지 수행 (실제 4종 CSV 산출은 On-Prem 워커 배포 후).
+      이력은 브라우저 localStorage 에 결과(accepted/error/fail) 와 함께 기록됩니다.
     </div>
     <div class="panel-body" style="max-height:300px;">
       <table class="history" id="tbl-history">
@@ -519,9 +521,11 @@ function showDetail(pjtCd) {
   const lastTsDisplay = lastEntry
     ? `${lastTsStr}${pjtHist.length > 1 ? ` (총 ${pjtHist.length}회)` : ''}`
     : '미생성';
-  const lastStatusDisplay = lastEntry
-    ? (lastEntry.status === 're' ? '재생성됨' : '신규생성됨')
-    : '미생성';
+  let lastStatusDisplay;
+  if (!lastEntry) lastStatusDisplay = '미생성';
+  else if (lastEntry.status === 're') lastStatusDisplay = '재생성됨';
+  else if (lastEntry.status === 'fail') lastStatusDisplay = '실패';
+  else lastStatusDisplay = '신규생성됨';
 
   const kvList = [
     ['PJT_CD', r.PJT_CD],
@@ -583,32 +587,92 @@ function showDetail(pjtCd) {
   });
 }
 
-// ---------- 생성 (현재는 시뮬레이션) ----------
-function createForSelected() {
+// ---------- 생성 (n8n webhook 백엔드 호출) ----------
+const WEBHOOK_URL = 'https://habitree.app.n8n.cloud/webhook/pms-build';
+
+async function createForSelected() {
   if (!selected) return;
   const r = selected;
+  const btn = $('#btn-create');
+  const origText = btn ? btn.textContent : '';
 
-  // 동일 PJT 가 이미 이력에 있는지
-  const hist = loadHistory();
-  const prior = hist.find(h => h.PJT_CD === r.PJT_CD);
-  const status = prior ? 're' : 'new';
+  // 동일 PJT 가 이미 이력에 있는지 (재생성 여부 판단)
+  const priorHist = loadHistory();
+  const prior = priorHist.find(h => h.PJT_CD === r.PJT_CD);
+  const reFlag = !!prior;
+
+  // 버튼 상태 — 호출 중 잠금
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 요청 중...'; }
+  showToast(`요청 전송: ${r.PJT_CD}`);
+
+  const reqTs = new Date().toISOString();
+  const t0 = performance.now();
+  let webhookResp = null;
+  let webhookErr = null;
+  let httpStatus = null;
+
+  try {
+    const resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pjt_cd: r.PJT_CD,
+        requester: 'page_user',
+        suffix: '',
+      }),
+    });
+    httpStatus = resp.status;
+    const txt = await resp.text();
+    try { webhookResp = JSON.parse(txt); }
+    catch (e) { webhookResp = { _raw: txt }; }
+  } catch (e) {
+    webhookErr = String(e);
+  }
+  const dur = Math.round(performance.now() - t0);
+
+  // 결과를 이력 entry 로 변환
+  let status, note;
+  if (webhookErr) {
+    status = 'fail';
+    note = `❌ 네트워크 오류 (${dur}ms): ${webhookErr}`;
+  } else if (webhookResp && webhookResp.status === 'accepted') {
+    status = reFlag ? 're' : 'new';
+    note = `✓ 큐 등록 (${dur}ms) trace_id=${webhookResp.trace_id || '?'}`;
+  } else if (webhookResp && webhookResp.status === 'error') {
+    status = 'fail';
+    note = `❌ ${webhookResp.code || 'ERROR'} (${dur}ms): ${webhookResp.error || webhookResp.message || ''}`;
+  } else {
+    status = 'fail';
+    note = `❌ 예상외 응답 (HTTP ${httpStatus}, ${dur}ms): ${JSON.stringify(webhookResp).slice(0, 120)}`;
+  }
 
   const entry = {
-    ts: new Date().toISOString(),
+    ts: reqTs,
     PJT_CD: r.PJT_CD,
     PJT_NM: r.PJT_NM,
     BP_NM: r.BP_NM || '',
     status,
-    note: '시뮬레이션 — 백엔드 미연결',
+    note,
+    duration_ms: dur,
+    http_status: httpStatus,
+    trace_id: (webhookResp && webhookResp.trace_id) || null,
   };
+  const hist = loadHistory();
   hist.unshift(entry);
   saveHistory(hist);
   renderHistory();
 
-  // 상세 패널의 "최근 생성" 값을 즉시 반영
+  // 상세 패널의 "최근 생성" 값 즉시 반영 (성공·실패 모두)
   showDetail(r.PJT_CD);
 
-  showToast(`${status === 're' ? '재생성 기록' : '생성 기록'}: ${r.PJT_CD}`);
+  // 버튼 복원
+  if (btn) { btn.disabled = false; btn.textContent = origText || '▶ 프로젝트 자료 생성'; }
+
+  if (status === 'fail') {
+    showToast(`실패: ${note}`, 4000);
+  } else {
+    showToast(`${reFlag ? '재' : '신규'} 큐 등록 완료: ${r.PJT_CD} (${dur}ms)`);
+  }
 }
 
 // ---------- 이력 (localStorage) ----------
@@ -632,9 +696,17 @@ function renderHistory() {
   tbody.innerHTML = hist.map((h, idx) => {
     const ts = new Date(h.ts);
     const tsStr = `${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')} ${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}:${String(ts.getSeconds()).padStart(2,'0')}`;
-    const pill = h.status === 're'
-      ? '<span class="pill pill-re">재생성</span>'
-      : '<span class="pill pill-new">신규</span>';
+    let pill, noteClass;
+    if (h.status === 're') {
+      pill = '<span class="pill pill-re">재생성</span>';
+      noteClass = 'pill-fake';
+    } else if (h.status === 'fail') {
+      pill = '<span class="pill pill-fail">실패</span>';
+      noteClass = 'pill-fail';
+    } else {
+      pill = '<span class="pill pill-new">신규</span>';
+      noteClass = 'pill-fake';
+    }
     return `
       <tr>
         <td>${tsStr}</td>
@@ -642,7 +714,7 @@ function renderHistory() {
         <td>${h.PJT_NM || ''}</td>
         <td>${h.BP_NM || ''}</td>
         <td>${pill}</td>
-        <td><span class="pill pill-fake">${h.note || ''}</span></td>
+        <td><span class="pill ${noteClass}">${h.note || ''}</span></td>
         <td><button class="btn" style="padding:2px 8px; font-size:11px;" onclick="removeHistory(${idx})">삭제</button></td>
       </tr>
     `;
@@ -697,6 +769,23 @@ $('#q').addEventListener('keydown', (e) => {
     $('#q').value = ''; applyFilter();
   }
 });
+
+// ---------- 환경 감지 (CORS 안내) ----------
+(function checkEnv() {
+  const allowedOrigin = 'cdhnayajeil-code.github.io';
+  const isAllowedHost = location.hostname === allowedOrigin;
+  const isFile = location.protocol === 'file:';
+  if (!isAllowedHost) {
+    const n = document.querySelector('.notice');
+    if (n) {
+      const msg = isFile
+        ? '⚠️ <b>file:// 환경</b> — webhook 호출 시 CORS preflight 실패가 예상됩니다. 정식 환경: <code>https://cdhnayajeil-code.github.io/erp_db/</code>'
+        : `⚠️ <b>현재 도메인 ${location.hostname}</b> — n8n webhook 의 Access-Control-Allow-Origin 은 <code>https://${allowedOrigin}</code> 만 허용합니다. CORS 차단 가능.`;
+      n.innerHTML += '<br>' + msg;
+      n.style.borderLeftColor = '#dc2626';
+    }
+  }
+})();
 
 // ---------- 초기화 ----------
 populateFilters();
