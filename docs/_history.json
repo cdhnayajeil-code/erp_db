@@ -1,1 +1,19 @@
-[]
+[
+  {
+    "trace_id": "demo_b_test_20260522",
+    "PJT_CD": "2024-056-SCH",
+    "PJT_NM": "천안 CF동 극판 M라인 PD,믹싱설비, 분체 제작 설치_(중대형)",
+    "BP_NM": "삼성에스디아이(주)",
+    "requester": "claude_b_test",
+    "ts": "2026-05-22T12:12:45",
+    "requested_at": "2026-05-22T12:10:00+09:00",
+    "completed_at": "2026-05-22T12:12:45",
+    "status": "new",
+    "note": "✓ 빌드 완료 (21.6s)",
+    "duration_sec": 21.56,
+    "returncode": 0,
+    "stdout_tail": "069 행 / 15 컬럼\n  2024-056-SCH_02_수금데이터.csv: 5 행 / 7 컬럼\n  2024-056-SCH_03_매입데이터.csv: 3000 행 / 15 컬럼\n  2024-056-SCH_04_수불데이터.csv: 5 행 / 15 컬럼\n\n=== _summary.json 생성 ===\n  _summary.json 작성 (지출 3069/수금 5/매입 3000/수불 5)\n\n=== 요약 HTML 생성 ===\n  프로젝트원가_요약_2024-056-SCH_test_demo.html 작성\n\n=== 완료 (SQL 기반) : E:\\OneDrive\\1.JOB\\ERP_DB\\사업관리\\프로젝트원가 자료\\2024-056-SCH_test_demo ===\n  지출   : 3069 행 / 6,800,248,203 원  (중복 0건/0)\n  수금   : 5 행 / 8,278,684,052 원\n  매입   : 3000 행 / 3,248,704,508 원\n  수불   : 5 행 / 219,703,669 원\n",
+    "stderr_tail": "",
+    "_source": "server"
+  }
+]
