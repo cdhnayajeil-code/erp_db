@@ -243,7 +243,8 @@
   th[data-key="BP_NM"], td[data-key="BP_NM"] { max-width: 180px; }
   th[data-key="PJT_STATUS"], td[data-key="PJT_STATUS"] { width: 60px; text-align: center; }
   th[data-key="SO_DT"], td[data-key="SO_DT"] { width: 92px; }
-  th[data-key="PERIOD_TO_DT"], td[data-key="PERIOD_TO_DT"] { width: 92px; }
+  th[data-key="REQ_TS"], td[data-key="REQ_TS"] { width: 130px; font-variant-numeric: tabular-nums; }
+  th[data-key="DONE_TS"], td[data-key="DONE_TS"] { width: 130px; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -251,7 +252,7 @@
 <header>
   <h1>📁 프로젝트 선택 · 자료생성 콘솔</h1>
   <div class="meta">
-    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 11:41:21</b>
+    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 11:56:27</b>
   </div>
 </header>
 
@@ -288,8 +289,8 @@
             <th data-key="PJT_STATUS">상태</th>
             <th data-key="PJT_TYPE">유형</th>
             <th data-key="SO_DT">수주일</th>
-            <th data-key="PERIOD_TO_DT">기한</th>
-            <th data-key="BZ_PM_NM">PM</th>
+            <th data-key="REQ_TS">요청일자</th>
+            <th data-key="DONE_TS">처리일자</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -410,6 +411,33 @@ function populateFilters() {
 // ---------- 검색/필터 ----------
 let sortState = { key: 'PJT_CD', dir: -1 };  // -1 desc, 1 asc
 
+// 요청/처리 일자 캐시 — PJT_CD 별 최신 요청/처리 시각
+// 페이지 로드, refreshServerHistory, createForSelected 직후 재빌드
+const lastTsCache = new Map();
+
+function rebuildLastTsCache() {
+  lastTsCache.clear();
+  const all = getMergedHistory();
+  for (const e of all) {
+    const pjt = e.PJT_CD;
+    if (!pjt) continue;
+    const cur = lastTsCache.get(pjt) || { req: null, done: null };
+    const reqTs = e.requested_at || e.ts;
+    const doneTs = e.completed_at || (e._source === 'server' ? e.ts : null);
+    if (reqTs && (!cur.req || reqTs > cur.req)) cur.req = reqTs;
+    if (doneTs && (!cur.done || doneTs > cur.done)) cur.done = doneTs;
+    lastTsCache.set(pjt, cur);
+  }
+}
+
+function fmtTs(iso) {
+  if (!iso) return '<span style="color:#cbd5e1;">-</span>';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function applyFilter() {
   const q = $('#q').value.trim().toLowerCase();
   const tokens = q ? q.split(/\s+/) : [];
@@ -435,7 +463,17 @@ function applyFilter() {
 
   // sort
   filtered.sort((a, b) => {
-    const va = (a[sortState.key] || ''), vb = (b[sortState.key] || '');
+    let va, vb;
+    if (sortState.key === 'REQ_TS') {
+      va = (lastTsCache.get(a.PJT_CD) || {}).req || '';
+      vb = (lastTsCache.get(b.PJT_CD) || {}).req || '';
+    } else if (sortState.key === 'DONE_TS') {
+      va = (lastTsCache.get(a.PJT_CD) || {}).done || '';
+      vb = (lastTsCache.get(b.PJT_CD) || {}).done || '';
+    } else {
+      va = (a[sortState.key] || '');
+      vb = (b[sortState.key] || '');
+    }
     if (va < vb) return -1 * sortState.dir;
     if (va > vb) return  1 * sortState.dir;
     return 0;
@@ -452,7 +490,11 @@ function renderList(rows) {
     return;
   }
   // 가상화 없이 — 753건이면 충분
-  const html = rows.map(r => `
+  const html = rows.map(r => {
+    const ts = lastTsCache.get(r.PJT_CD) || {};
+    const reqDisplay = fmtTs(ts.req);
+    const doneDisplay = fmtTs(ts.done);
+    return `
     <tr data-pjt="${r.PJT_CD}">
       <td data-key="PJT_CD"><b>${fmt(r.PJT_CD)}</b></td>
       <td data-key="PJT_NM" title="${fmt(r.PJT_NM)}">${fmt(r.PJT_NM)}</td>
@@ -460,10 +502,11 @@ function renderList(rows) {
       <td data-key="PJT_STATUS">${statusBadge(r.PJT_STATUS)}</td>
       <td data-key="PJT_TYPE">${typeLabel(r.PJT_TYPE)}</td>
       <td data-key="SO_DT">${fmt(r.SO_DT)}</td>
-      <td data-key="PERIOD_TO_DT">${fmt(r.PERIOD_TO_DT)}</td>
-      <td data-key="BZ_PM_NM">${fmt(r.BZ_PM_NM)}</td>
+      <td data-key="REQ_TS" title="${ts.req || ''}">${reqDisplay}</td>
+      <td data-key="DONE_TS" title="${ts.done || ''}">${doneDisplay}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   tbody.innerHTML = html;
 
   // 행 클릭
@@ -652,7 +695,9 @@ async function createForSelected() {
   }
 
   const entry = {
-    ts: reqTs,
+    ts: reqTs,                 // 호환용 (=requested_at)
+    requested_at: reqTs,       // 명시적 요청 시각
+    completed_at: null,        // 로컬 entry 는 처리 시각 없음 (서버 entry 에서 채워짐)
     PJT_CD: r.PJT_CD,
     PJT_NM: r.PJT_NM,
     BP_NM: r.BP_NM || '',
@@ -667,7 +712,9 @@ async function createForSelected() {
   saveHistory(hist);
   renderHistory();
 
-  // 상세 패널의 "최근 생성" 값 즉시 반영 (성공·실패 모두)
+  // 캐시 재빌드 + 목록·상세 패널 즉시 갱신
+  rebuildLastTsCache();
+  applyFilter();
   showDetail(r.PJT_CD);
 
   // 버튼 복원
@@ -720,6 +767,8 @@ async function refreshServerHistory() {
     elStatus.style.color = 'var(--danger)';
   }
   renderHistory();
+  rebuildLastTsCache();
+  applyFilter();  // 목록의 요청/처리 일자 즉시 갱신
   // 현재 선택된 상세 패널도 갱신 (최근 생성 일시가 서버 이력에 있을 수 있음)
   if (selected) showDetail(selected.PJT_CD);
 }
@@ -798,6 +847,8 @@ function removeLocalEntry(trace_id, ts, pjt) {
   });
   saveHistory(filtered);
   renderHistory();
+  rebuildLastTsCache();
+  applyFilter();
 }
 
 function removeHistory(idx) {
@@ -805,6 +856,8 @@ function removeHistory(idx) {
   hist.splice(idx, 1);
   saveHistory(hist);
   renderHistory();
+  rebuildLastTsCache();
+  applyFilter();
 }
 
 function exportHistoryCSV() {
@@ -868,6 +921,7 @@ $('#q').addEventListener('keydown', (e) => {
 
 // ---------- 초기화 ----------
 populateFilters();
+rebuildLastTsCache();  // 로컬 이력만 우선 반영 — 서버 이력은 refreshServerHistory 후 재빌드
 applyFilter();
 renderHistory();
 
