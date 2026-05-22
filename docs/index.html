@@ -215,6 +215,8 @@
   .pill-re  { background: var(--warn-soft); color: var(--warn); }
   .pill-fake{ background: #fef3c7; color: #92400e; }
   .pill-fail{ background: var(--danger-soft); color: var(--danger); }
+  .pill-server { background: #e0e7ff; color: #4338ca; }
+  .pill-local  { background: #f3f4f6; color: #6b7280; }
 
   .toast {
     position: fixed; right: 20px; bottom: 20px;
@@ -249,7 +251,7 @@
 <header>
   <h1>📁 프로젝트 선택 · 자료생성 콘솔</h1>
   <div class="meta">
-    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 11:32:07</b>
+    ERP 추출시각 <b>2026-05-22 08:34:45</b> · 프로젝트 <b id="cnt-total">753</b>건 · 빌드 <b>2026-05-22 11:41:21</b>
   </div>
 </header>
 
@@ -312,8 +314,10 @@
   <section class="panel history-panel">
     <div class="panel-header">
       <h2>📝 생성 이력</h2>
-      <div class="stat">이력 <b id="cnt-history">0</b>건</div>
-      <div style="margin-left:auto; display:flex; gap:6px;">
+      <div class="stat">서버 <b id="cnt-server">0</b> · 로컬 <b id="cnt-local">0</b> · 표시 <b id="cnt-history">0</b>건</div>
+      <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+        <span id="server-sync-status" style="font-size:11px; color:var(--text-sub);">서버 미동기</span>
+        <button class="btn" onclick="refreshServerHistory()">🔄 서버 새로고침</button>
         <button class="btn" onclick="exportHistoryCSV()">CSV 내보내기</button>
       </div>
     </div>
@@ -327,6 +331,7 @@
         <thead>
           <tr>
             <th style="width:140px;">생성시각</th>
+            <th style="width:50px;">소스</th>
             <th style="width:110px;">PJT_CD</th>
             <th>PJT_NM</th>
             <th style="width:120px;">거래처</th>
@@ -335,7 +340,7 @@
             <th style="width:80px;">조치</th>
           </tr>
         </thead>
-        <tbody><tr><td colspan="7" style="text-align:center; padding:20px; color:#9ca3af;">생성 이력이 없습니다</td></tr></tbody>
+        <tbody><tr><td colspan="8" style="text-align:center; padding:20px; color:#9ca3af;">생성 이력이 없습니다</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -508,8 +513,8 @@ function showDetail(pjtCd) {
   selected = r;
   const dt = $('#detail-panel');
 
-  // 본 PJT 의 생성 이력 추출 (loadHistory 는 최신순으로 정렬되어 있음)
-  const pjtHist = loadHistory().filter(h => h.PJT_CD === r.PJT_CD);
+  // 본 PJT 의 생성 이력 추출 — 서버 + 로컬 병합본 기준
+  const pjtHist = getMergedHistory().filter(h => h.PJT_CD === r.PJT_CD);
   const lastEntry = pjtHist[0];
   const lastTsStr = lastEntry
     ? (() => {
@@ -675,7 +680,7 @@ async function createForSelected() {
   }
 }
 
-// ---------- 이력 (localStorage) ----------
+// ---------- 이력 (localStorage + 서버 _history.json 병합) ----------
 function loadHistory() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -685,15 +690,69 @@ function saveHistory(arr) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
 }
 
+// 서버측 이력 캐시 (워커가 _history.json 에 append 한 entry 들)
+let serverHistoryCache = [];
+
+async function loadServerHistory() {
+  // GitHub Pages 환경 또는 file:// 환경 모두에서 같은 디렉토리의 _history.json 시도
+  const url = '_history.json?ts=' + Date.now();
+  try {
+    const resp = await fetch(url, { cache: 'no-cache' });
+    if (!resp.ok) return { ok: false, status: resp.status, data: [] };
+    const arr = await resp.json();
+    return { ok: true, status: resp.status, data: Array.isArray(arr) ? arr : [] };
+  } catch (e) {
+    return { ok: false, status: 0, data: [], error: String(e) };
+  }
+}
+
+async function refreshServerHistory() {
+  const r = await loadServerHistory();
+  const elStatus = $('#server-sync-status');
+  if (r.ok) {
+    serverHistoryCache = r.data;
+    const ts = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    elStatus.textContent = `서버 동기 ${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())} (${r.data.length}건)`;
+    elStatus.style.color = 'var(--ok)';
+  } else {
+    elStatus.textContent = `서버 미동기 (HTTP ${r.status})`;
+    elStatus.style.color = 'var(--danger)';
+  }
+  renderHistory();
+  // 현재 선택된 상세 패널도 갱신 (최근 생성 일시가 서버 이력에 있을 수 있음)
+  if (selected) showDetail(selected.PJT_CD);
+}
+
+// 병합: 서버(우선) + 로컬 — trace_id (없으면 PJT_CD + ts) 키로 dedupe
+function getMergedHistory() {
+  const seen = new Map();
+  for (const e of serverHistoryCache) {
+    const key = e.trace_id || (e.PJT_CD + '|' + e.ts);
+    seen.set(key, Object.assign({ _source: 'server' }, e));
+  }
+  for (const e of loadHistory()) {
+    const key = e.trace_id || (e.PJT_CD + '|' + e.ts);
+    if (!seen.has(key)) {
+      seen.set(key, Object.assign({ _source: 'local' }, e));
+    }
+  }
+  // 시간 역순
+  return [...seen.values()].sort((a, b) => (a.ts < b.ts ? 1 : -1));
+}
+
 function renderHistory() {
-  const hist = loadHistory();
-  $('#cnt-history').textContent = hist.length;
+  const local = loadHistory();
+  const merged = getMergedHistory();
+  $('#cnt-server').textContent = serverHistoryCache.length;
+  $('#cnt-local').textContent = local.length;
+  $('#cnt-history').textContent = merged.length;
   const tbody = $('#tbl-history tbody');
-  if (!hist.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#9ca3af;">생성 이력이 없습니다</td></tr>';
+  if (!merged.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#9ca3af;">생성 이력이 없습니다</td></tr>';
     return;
   }
-  tbody.innerHTML = hist.map((h, idx) => {
+  tbody.innerHTML = merged.map((h, idx) => {
     const ts = new Date(h.ts);
     const tsStr = `${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')} ${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}:${String(ts.getSeconds()).padStart(2,'0')}`;
     let pill, noteClass;
@@ -707,18 +766,38 @@ function renderHistory() {
       pill = '<span class="pill pill-new">신규</span>';
       noteClass = 'pill-fake';
     }
+    const srcPill = h._source === 'server'
+      ? '<span class="pill pill-server">🌐 서버</span>'
+      : '<span class="pill pill-local">💾 로컬</span>';
+    // 서버 entry 는 삭제 비활성, 로컬 entry 만 삭제 가능
+    const action = h._source === 'server'
+      ? '<span style="color:#9ca3af; font-size:11px;">서버</span>'
+      : `<button class="btn" style="padding:2px 8px; font-size:11px;" onclick="removeLocalEntry('${(h.trace_id || '').replace(/'/g, '')}', '${h.ts}', '${h.PJT_CD}')">삭제</button>`;
     return `
       <tr>
         <td>${tsStr}</td>
+        <td>${srcPill}</td>
         <td><b>${h.PJT_CD}</b></td>
         <td>${h.PJT_NM || ''}</td>
         <td>${h.BP_NM || ''}</td>
         <td>${pill}</td>
         <td><span class="pill ${noteClass}">${h.note || ''}</span></td>
-        <td><button class="btn" style="padding:2px 8px; font-size:11px;" onclick="removeHistory(${idx})">삭제</button></td>
+        <td>${action}</td>
       </tr>
     `;
   }).join('');
+}
+
+// trace_id 또는 PJT_CD+ts 로 로컬 entry 삭제
+function removeLocalEntry(trace_id, ts, pjt) {
+  const hist = loadHistory();
+  const filtered = hist.filter(h => {
+    if (trace_id && h.trace_id === trace_id) return false;
+    if (!trace_id && h.PJT_CD === pjt && h.ts === ts) return false;
+    return true;
+  });
+  saveHistory(filtered);
+  renderHistory();
 }
 
 function removeHistory(idx) {
@@ -729,10 +808,10 @@ function removeHistory(idx) {
 }
 
 function exportHistoryCSV() {
-  const hist = loadHistory();
+  const hist = getMergedHistory();
   if (!hist.length) { showToast('이력이 없습니다'); return; }
-  const header = ['생성시각', 'PJT_CD', 'PJT_NM', 'BP_NM', '결과', '비고'];
-  const rows = hist.map(h => [h.ts, h.PJT_CD, h.PJT_NM || '', h.BP_NM || '', h.status, h.note || '']);
+  const header = ['생성시각', '소스', 'PJT_CD', 'PJT_NM', 'BP_NM', '결과', '비고', 'trace_id'];
+  const rows = hist.map(h => [h.ts, h._source || 'local', h.PJT_CD, h.PJT_NM || '', h.BP_NM || '', h.status, h.note || '', h.trace_id || '']);
   const csv = [header, ...rows].map(r =>
     r.map(c => {
       const s = String(c).replace(/"/g, '""');
@@ -791,6 +870,10 @@ $('#q').addEventListener('keydown', (e) => {
 populateFilters();
 applyFilter();
 renderHistory();
+
+// 서버 이력 초기 로드 + 30초 주기 새로고침
+refreshServerHistory();
+setInterval(refreshServerHistory, 30000);
 </script>
 
 </body>
