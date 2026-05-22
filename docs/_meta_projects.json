@@ -1,0 +1,275 @@
+{
+  "extract_dt": "2026-05-22 08:34:45",
+  "table": "PM_PROJECT_MASTER_KO174",
+  "row_count": 753,
+  "columns_in_table": [
+    {
+      "name": "PJT_CD",
+      "type": "nvarchar",
+      "max_len": 25
+    },
+    {
+      "name": "PJT_NM",
+      "type": "nvarchar",
+      "max_len": 100
+    },
+    {
+      "name": "VER_CD",
+      "type": "nvarchar",
+      "max_len": 4
+    },
+    {
+      "name": "COST_YYYYMM",
+      "type": "nvarchar",
+      "max_len": 6
+    },
+    {
+      "name": "SO_NO",
+      "type": "nvarchar",
+      "max_len": 18
+    },
+    {
+      "name": "CUST_PO_NO",
+      "type": "nvarchar",
+      "max_len": 18
+    },
+    {
+      "name": "SO_TYPE",
+      "type": "nvarchar",
+      "max_len": 4
+    },
+    {
+      "name": "MODEL",
+      "type": "nvarchar",
+      "max_len": 100
+    },
+    {
+      "name": "BZ_PM_NM",
+      "type": "nvarchar",
+      "max_len": 30
+    },
+    {
+      "name": "BZ_PL_NM",
+      "type": "nvarchar",
+      "max_len": 30
+    },
+    {
+      "name": "BP_PL_NM",
+      "type": "nvarchar",
+      "max_len": 30
+    },
+    {
+      "name": "BP_CD",
+      "type": "nvarchar",
+      "max_len": 10
+    },
+    {
+      "name": "SHIP_TO_PARTY",
+      "type": "nvarchar",
+      "max_len": 10
+    },
+    {
+      "name": "BILL_TO_PARTY",
+      "type": "nvarchar",
+      "max_len": 10
+    },
+    {
+      "name": "PAYER",
+      "type": "nvarchar",
+      "max_len": 10
+    },
+    {
+      "name": "SO_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "CONTRACT_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "DELIVERY_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "PERIOD_FROM_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "PERIOD_TO_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "NET_COMP_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "SO_STATUS",
+      "type": "nvarchar",
+      "max_len": 2
+    },
+    {
+      "name": "PJT_TYPE",
+      "type": "nvarchar",
+      "max_len": 2
+    },
+    {
+      "name": "PAY_METH",
+      "type": "nvarchar",
+      "max_len": 2
+    },
+    {
+      "name": "DOC_CUR",
+      "type": "nvarchar",
+      "max_len": 3
+    },
+    {
+      "name": "XCH_RATE",
+      "type": "numeric",
+      "max_len": null
+    },
+    {
+      "name": "BILL_REF_TYPE",
+      "type": "nvarchar",
+      "max_len": 1
+    },
+    {
+      "name": "VAT_TYPE",
+      "type": "nvarchar",
+      "max_len": 2
+    },
+    {
+      "name": "TRACKING_NO",
+      "type": "nvarchar",
+      "max_len": 25
+    },
+    {
+      "name": "REMARK",
+      "type": "nvarchar",
+      "max_len": 200
+    },
+    {
+      "name": "PJT_STATUS",
+      "type": "nvarchar",
+      "max_len": 1
+    },
+    {
+      "name": "PROGRESS_STATUS",
+      "type": "nvarchar",
+      "max_len": 2
+    },
+    {
+      "name": "PJT_ISSUE",
+      "type": "nvarchar",
+      "max_len": 300
+    },
+    {
+      "name": "INSRT_USER_ID",
+      "type": "nvarchar",
+      "max_len": 25
+    },
+    {
+      "name": "INSRT_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "UPDT_USER_ID",
+      "type": "nvarchar",
+      "max_len": 25
+    },
+    {
+      "name": "UPDT_DT",
+      "type": "datetime",
+      "max_len": null
+    },
+    {
+      "name": "REF_FLAG",
+      "type": "nvarchar",
+      "max_len": 1
+    },
+    {
+      "name": "REF_PJT_CD",
+      "type": "nvarchar",
+      "max_len": 25
+    },
+    {
+      "name": "FREE_AS_FLAG",
+      "type": "nvarchar",
+      "max_len": 1
+    },
+    {
+      "name": "FREE_AS_TERM",
+      "type": "nvarchar",
+      "max_len": 100
+    },
+    {
+      "name": "PJT_COST_APP_NO",
+      "type": "nvarchar",
+      "max_len": 18
+    }
+  ],
+  "columns_extracted": [
+    "PJT_CD",
+    "PJT_NM",
+    "PJT_STATUS",
+    "PJT_TYPE",
+    "BP_CD",
+    "SO_DT",
+    "SO_NO",
+    "CONTRACT_DT",
+    "REMARK",
+    "PERIOD_TO_DT",
+    "FREE_AS_TERM",
+    "FREE_AS_FLAG",
+    "REF_FLAG",
+    "MODEL",
+    "INSRT_DT",
+    "DOC_CUR",
+    "SO_TYPE",
+    "BZ_PL_NM",
+    "DELIVERY_DT",
+    "PERIOD_FROM_DT",
+    "XCH_RATE",
+    "UPDT_DT",
+    "PJT_ISSUE",
+    "BILL_REF_TYPE",
+    "PJT_COST_APP_NO",
+    "SHIP_TO_PARTY",
+    "VAT_TYPE",
+    "COST_YYYYMM",
+    "SO_STATUS",
+    "PAY_METH",
+    "PROGRESS_STATUS",
+    "PAYER",
+    "BP_PL_NM",
+    "TRACKING_NO",
+    "CUST_PO_NO",
+    "BILL_TO_PARTY",
+    "VER_CD",
+    "NET_COMP_DT",
+    "INSRT_USER_ID",
+    "UPDT_USER_ID",
+    "REF_PJT_CD",
+    "BZ_PM_NM",
+    "BP_NM"
+  ],
+  "status_dist": {
+    "Y": 576,
+    "N": 177
+  },
+  "type_dist": {
+    "(없음)": 669,
+    "10": 63,
+    "20": 14,
+    "30": 7
+  },
+  "group_dist": {
+    "(없음)": 753
+  }
+}
